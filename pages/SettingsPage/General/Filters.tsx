@@ -1,6 +1,6 @@
 import FontAwesome from "@react-native-vector-icons/fontawesome";
 import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons";
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import { Alert, StyleSheet, Switch, Text, View } from "react-native";
 
 import List from "../../../components/UI/List";
@@ -9,6 +9,10 @@ import TextInput from "../../../components/UI/TextInput";
 import { FiltersContext } from "../../../contexts/SettingsContexts/FiltersContext";
 import { ThemeContext } from "../../../contexts/SettingsContexts/ThemeContext";
 import { SubscriptionsContext } from "../../../contexts/SubscriptionsContext";
+import {
+  isWildcardSubredditFilter,
+  normalizeSubredditFilter,
+} from "../../../utils/filters/SubredditFiltering";
 import { useURLNavigation } from "../../../utils/navigation";
 
 const noPolitics = `
@@ -137,6 +141,22 @@ export default function Filters() {
   const { pushURL } = useURLNavigation();
 
   const filteredSubreddits = Object.entries(hideFilteredSubreddits);
+
+  const [newSubredditFilter, setNewSubredditFilter] = useState("");
+
+  const addSubredditFilter = () => {
+    if (!newSubredditFilter.trim()) return;
+    const filter = normalizeSubredditFilter(newSubredditFilter);
+    if (!filter) {
+      Alert.alert(
+        "Invalid filter",
+        "Subreddit filters can only contain letters, numbers, underscores, and * wildcards.",
+      );
+      return;
+    }
+    toggleHideSubreddit(filter, true);
+    setNewSubredditFilter("");
+  };
 
   const hideSeenURLOverrides = Object.entries(hideSeenURLs)
     .filter(([_, setting]) => setting !== filterSeenPosts)
@@ -362,9 +382,30 @@ export default function Filters() {
         ]}
       >
         You can filter subreddits by long-pressing posts on /r/all or
-        /r/popular. Once filtered, subreddits will apear here. Delete the filter
-        to begin seeing posts from the subreddit again.
+        /r/popular, or by adding them below. Use * as a wildcard to filter every
+        subreddit matching a pattern. For example, *news* filters r/news,
+        r/worldnews, and r/UpliftingNews. Matching is case insensitive. Once
+        filtered, subreddits will apear here. Delete the filter to begin seeing
+        posts from the subreddit again.
       </Text>
+      <TextInput
+        style={[
+          styles.subredditFilterInput,
+          {
+            backgroundColor: theme.tint,
+            borderColor: theme.divider,
+            color: theme.text,
+          },
+        ]}
+        placeholder="Add subreddit or pattern, e.g. *news*"
+        placeholderTextColor={theme.subtleText}
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="done"
+        value={newSubredditFilter}
+        onChangeText={setNewSubredditFilter}
+        onSubmitEditing={addSubredditFilter}
+      />
       {filteredSubreddits.length > 0 && (
         <List
           title="Subreddits"
@@ -375,7 +416,15 @@ export default function Filters() {
             renderCustomItem: () => (
               <>
                 <View style={styles.iconMargin}>
-                  <FontAwesome name="reddit" size={24} color={theme.text} />
+                  {isWildcardSubredditFilter(subreddit) ? (
+                    <MaterialCommunityIcons
+                      name="asterisk"
+                      size={22}
+                      color={theme.text}
+                    />
+                  ) : (
+                    <FontAwesome name="reddit" size={24} color={theme.text} />
+                  )}
                 </View>
                 <View style={styles.subredditFilterInfo}>
                   <Text style={{ color: theme.text, fontSize: 17 }}>
@@ -395,7 +444,10 @@ export default function Filters() {
               </>
             ),
             onPress: () => {
-              Alert.alert(`Stop filtering /r/${subreddit}?`, "", [
+              const label = isWildcardSubredditFilter(subreddit)
+                ? `subreddits matching ${subreddit}`
+                : `/r/${subreddit}`;
+              Alert.alert(`Stop filtering ${label}?`, "", [
                 {
                   text: "Cancel",
                   style: "cancel",
@@ -440,6 +492,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
     minHeight: 100,
+  },
+  subredditFilterInput: {
+    marginTop: 10,
+    marginHorizontal: 15,
+    borderWidth: 2,
+    borderRadius: 10,
+    padding: 10,
   },
   iconMargin: {
     width: 24,

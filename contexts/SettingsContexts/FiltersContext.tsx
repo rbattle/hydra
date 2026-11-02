@@ -14,13 +14,18 @@ import {
   doesPostPassTextFilterMap,
   doesCommentPassTextFilterMap,
 } from "../../utils/filters/TextFiltering";
+import {
+  isSubredditFiltered,
+  makeSubredditFilterMatcher,
+  SubredditFilterMap,
+} from "../../utils/filters/SubredditFiltering";
 import { FilterFunction } from "../../utils/useRedditDataState";
 import { SubscriptionsContext } from "../SubscriptionsContext";
 import RedditURL from "../../utils/RedditURL";
 
 type HideSeenURLs = Record<string, boolean>;
 
-type HideFilteredSubreddits = Record<string, number | true>;
+type HideFilteredSubreddits = SubredditFilterMap;
 
 export const FILTER_SEEN_POSTS_KEY = "filterSeenPosts";
 export const FILTER_SEEN_POSTS_DEFAULT = false;
@@ -111,14 +116,17 @@ export function FiltersProvider({ children }: React.PropsWithChildren) {
     }
   };
 
+  const subredditFilterMatcher = useMemo(
+    () => makeSubredditFilterMatcher(hideFilteredSubreddits),
+    [hideFilteredSubreddits],
+  );
+
   const filterPostsBySubreddit: FilterFunction<Post> = (posts) => {
     const now = Date.now();
-    return posts.filter((post) => {
-      const filterValue = hideFilteredSubreddits[post.subreddit];
-      if (!filterValue) return true;
-      if (filterValue === true) return false;
-      return now >= filterValue;
-    });
+    return posts.filter(
+      (post) =>
+        !isSubredditFiltered(subredditFilterMatcher, post.subreddit, now),
+    );
   };
 
   return (

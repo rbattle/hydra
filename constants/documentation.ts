@@ -990,6 +990,8 @@ You can hide all posts from specific subreddits. Subreddit filters apply on comb
 
 To filter a subreddit, long-press a post from that subreddit and select **\"Filter Subreddit\"**, then choose how long the filter lasts: **\"Filter for a day\"**, **\"Filter for a week\"**, or **\"Filter forever\"**. The post is removed and posts from that subreddit are hidden until the filter expires. Filters set to forever last until you remove them.
 
+You can also add filters manually in [Filters settings](hydra://settings/general/filters) by typing a subreddit name into the box under **\"Filtered subreddits\"**. Use **\"*\"** as a wildcard to filter every subreddit matching a pattern. For example, **\"*news*\"** hides r/news, r/worldnews, and r/UpliftingNews, and **\"nfl*\"** hides any subreddit starting with \"nfl\". Matching is case insensitive. Manually added filters last forever.
+
 To manage your filtered subreddits, go to [Filters settings](hydra://settings/general/filters) and scroll to the **\"Filtered subreddits\"** section. Each entry shows how long the filter lasts — \"Forever\" or an expiration date. Tap a subreddit and confirm to remove the filter.
 
 ## Text Filters and Smart Filters
