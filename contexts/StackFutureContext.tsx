@@ -4,23 +4,34 @@ import {
   StackNavigationState,
   EventListenerCallback,
   useNavigation,
+  useRoute,
 } from "@react-navigation/native";
 import {
   NativeStackHeaderItem,
   NativeStackNavigationEventMap,
   NativeStackNavigationProp,
 } from "@react-navigation/native-stack";
+import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons";
 import {
   createContext,
   MutableRefObject,
   PropsWithChildren,
+  useContext,
   useEffect,
   useRef,
 } from "react";
-import { useVerticalBarEdgeIOS } from "expo-status-bar";
-import { Animated, Dimensions } from "react-native";
+import { Animated, Dimensions, TouchableOpacity } from "react-native";
 
 import { StackParamsList } from "../app/stack";
+import { GesturesContext } from "./SettingsContexts/GesturesContext";
+import { ThemeContext } from "./SettingsContexts/ThemeContext";
+import { IS_LIQUID_GLASS } from "../utils/liquidGlass";
+import { releaseSnapshot, retainSnapshot } from "../utils/screenSnapshots";
+
+/** Screens whose headerLeft the forward button would replace. */
+const ROUTES_WITH_OWN_HEADER_LEFT = new Set<keyof StackParamsList>([
+  "UserPage",
+]);
 
 type HandleBeforeRemoveType = EventListenerCallback<
   NativeStackNavigationEventMap &
@@ -46,18 +57,28 @@ export function StackFutureProvider({
 }: StackFutureProviderProps) {
   const navigation =
     useNavigation<NativeStackNavigationProp<StackParamsList>>();
+  const route = useRoute();
 
   const windowWidth = useRef(Dimensions.get("window").width);
   const gestureStart = useRef<{ x: number; y: number } | null>(null);
 
+  const { theme } = useContext(ThemeContext);
+  const { showForwardButton } = useContext(GesturesContext);
+
   const handleBeforeRemove: HandleBeforeRemoveType = (e) => {
     // A reset replaces the stack, so its removed routes aren't somewhere to go forward to
     if (e.data.action.type === "RESET") {
-      futureRoutes.current = [];
+      clearFuture();
       return;
     }
     const popped = navigation.getState().routes.slice(-1)[0];
     futureRoutes.current.push(popped);
+    retainSnapshot(popped.key);
+  };
+
+  const clearFuture = () => {
+    futureRoutes.current.forEach((route) => releaseSnapshot(route.key));
+    futureRoutes.current = [];
   };
 
   useEffect(() => {
@@ -70,40 +91,69 @@ export function StackFutureProvider({
   const goForward = () => {
     const popped = futureRoutes.current.pop();
     if (!popped) return false;
-    navigation.push(popped.name as any, popped.params as any);
+    // restoreKey lets the new screen pick up the popped one's snapshot
+    navigation.push(
+      popped.name as any,
+      { ...popped.params, restoreKey: popped.key } as any,
+    );
     return true;
   };
 
   /**
-   * The iPhone Duo's vertical bar covers the screen edge the forward swipe
-   * starts from, but it does host native header items next to the back button.
+   * A forward button next to the back button whenever there's a screen to go
+   * forward to. It's also the only way forward on the iPhone Duo, whose
+   * vertical bar covers the screen edge the forward swipe starts from.
    */
-  const verticalBarEdge = useVerticalBarEdgeIOS();
   // Items a page puts in the vertical bar (e.g. split view's) replace the forward button
   const pageItems = useRef<NativeStackHeaderItem[] | null>(null);
   const updateHeaderLeftItems = () => {
-    const showForward = !!verticalBarEdge && futureRoutes.current.length > 0;
-    const items =
-      pageItems.current ??
-      (showForward
-        ? [
-            {
-              type: "button" as const,
-              label: "Forward",
-              icon: { type: "sfSymbol" as const, name: "chevron.forward" },
-              onPress: goForward,
-            },
-          ]
-        : null);
-    navigation.setOptions({
-      headerBackVisible: items ? true : undefined,
-      unstable_headerLeftItems: items ? () => items : undefined,
-    });
+    const showForward = showForwardButton && futureRoutes.current.length > 0;
+    if (IS_LIQUID_GLASS || pageItems.current) {
+      const items =
+        pageItems.current ??
+        (showForward
+          ? [
+              {
+                type: "button" as const,
+                label: "Forward",
+                icon: { type: "sfSymbol" as const, name: "chevron.forward" },
+                onPress: goForward,
+              },
+            ]
+          : null);
+      navigation.setOptions({
+        headerBackVisible: items ? true : undefined,
+        unstable_headerLeftItems: items ? () => items : undefined,
+      });
+    } else if (
+      !ROUTES_WITH_OWN_HEADER_LEFT.has(route.name as keyof StackParamsList)
+    ) {
+      // headerLeft replaces the back button, so headerBackVisible keeps it
+      navigation.setOptions({
+        headerBackVisible: showForward || undefined,
+        unstable_headerLeftItems: undefined,
+        headerLeft: !showForward
+          ? undefined
+          : () => (
+              <TouchableOpacity
+                accessibilityLabel="Forward"
+                hitSlop={10}
+                onPress={goForward}
+              >
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={30}
+                  color={theme.iconOrTextButton}
+                />
+              </TouchableOpacity>
+            ),
+      });
+    }
   };
   useEffect(() => {
     updateHeaderLeftItems();
     return navigation.addListener("focus", updateHeaderLeftItems);
-  }, [navigation, verticalBarEdge]);
+  }, [navigation, showForwardButton]);
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener(
@@ -117,7 +167,7 @@ export function StackFutureProvider({
   return (
     <StackFutureContext.Provider
       value={{
-        clearFuture: () => (futureRoutes.current = []),
+        clearFuture,
         setVerticalBarItems: (items) => {
           pageItems.current = items;
           updateHeaderLeftItems();
