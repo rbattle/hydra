@@ -11,6 +11,12 @@ Hydra's gesture system lets you interact with posts and comments using swipe ges
 
 Enable "Swipe Anywhere to Navigate" in [Gestures settings](hydra://settings/general/gestures) to swipe right from anywhere on the screen to go back. When enabled, right swipe actions are disabled — only left swipe actions remain active.
 
+## Going Forward
+
+When you go back from a screen, whether by swiping, tapping the back button, or tapping the current tab again, Hydra remembers it. To return to it, tap the **forward button** (›) next to the back button, or swipe left starting from the very right edge of the screen. Feeds come back with the same posts loaded and scrolled to where you left off, without reloading. Opening something new clears the forward history, like a web browser.
+
+Turn off "Show Forward Button" in [Gestures settings](hydra://settings/general/gestures) to hide the button. The right edge swipe always works.
+
 ## Post Swipe Actions
 
 Configure four swipe actions for posts in [Gestures settings](hydra://settings/general/gestures). Available actions: Upvote, Downvote, Mark as Read, Bookmark, Share, Disabled.

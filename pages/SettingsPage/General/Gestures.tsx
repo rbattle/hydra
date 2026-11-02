@@ -16,6 +16,8 @@ export default function Gestures() {
   const {
     swipeAnywhereToNavigate,
     toggleSwipeAnywhereToNavigate,
+    showForwardButton,
+    toggleShowForwardButton,
     postSwipeOptions,
     setPostSwipeOption,
     commentSwipeOptions,
@@ -126,6 +128,30 @@ export default function Gestures() {
             text: "Swipe Anywhere to Navigate",
             onPress: () =>
               toggleSwipeAnywhereToNavigate(!swipeAnywhereToNavigate),
+          },
+          {
+            key: "showForwardButton",
+            icon: (
+              <MaterialCommunityIcons
+                name="chevron-right-circle-outline"
+                size={24}
+                color={theme.text}
+              />
+            ),
+            rightIcon: (
+              <Switch
+                trackColor={{
+                  false: theme.iconSecondary,
+                  true: theme.iconPrimary,
+                }}
+                value={showForwardButton}
+                onValueChange={() =>
+                  toggleShowForwardButton(!showForwardButton)
+                }
+              />
+            ),
+            text: "Show Forward Button",
+            onPress: () => toggleShowForwardButton(!showForwardButton),
           },
         ]}
       />

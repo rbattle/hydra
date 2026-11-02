@@ -1,4 +1,5 @@
-import { FlashList, FlashListProps } from "@shopify/flash-list";
+import { NavigationRouteContext } from "@react-navigation/native";
+import { FlashList, FlashListProps, FlashListRef } from "@shopify/flash-list";
 import * as Haptics from "expo-haptics";
 import { useContext, useEffect, useRef, useState } from "react";
 import {
@@ -22,6 +23,8 @@ import {
   TabBarSpacer,
 } from "../../contexts/TabBarInsetsContext";
 import { modifyStat, Stat } from "../../db/functions/Stats";
+import { useGlassHeaderInset } from "../../utils/liquidGlass";
+import { getSnapshot, updateSnapshot } from "../../utils/screenSnapshots";
 
 /**
  * Future note for when I'm an idiot and the scroller gets all glitchy again.
@@ -59,9 +62,55 @@ function RedditDataScroller<T extends RedditDataObject>(
   const { scrollDisabled } = useContext(ScrollerContext);
   const { handleScrollForTabBar } = useContext(TabScrollContext);
 
+  const listRef = useRef<FlashListRef<T>>(null);
+  const glassHeaderInset = useGlassHeaderInset();
+
+  /**
+   * A screen re-opened by going forward arrives with its items already
+   * loaded (see useRedditDataState), so scroll back to where it was left.
+   */
+  const route = useContext(NavigationRouteContext);
+  const routeKey = route?.key;
+  const [restoreAnchor] = useState(() => {
+    const restoreKey = (route?.params as { restoreKey?: string } | undefined)
+      ?.restoreKey;
+    if (!restoreKey || props.data.length === 0) return undefined;
+    const { anchorIndex, anchorOffset = 0 } = getSnapshot(restoreKey) ?? {};
+    if (anchorIndex === undefined || anchorIndex >= props.data.length) {
+      return undefined;
+    }
+    if (anchorIndex === 0 && anchorOffset <= 0) return undefined;
+    return { index: anchorIndex, offset: anchorOffset };
+  });
+
+  /**
+   * Records which item sits at the top of the visible area and how far into
+   * it the list is scrolled. The visible area starts below the glass header
+   * on iOS 26, where content scrolls underneath it, and item layouts don't
+   * include the list header (e.g. the search bar).
+   */
+  const saveScrollAnchor = (scrollPosition: number) => {
+    const list = listRef.current;
+    if (!routeKey || !list) return;
+    const lineY = scrollPosition + glassHeaderInset - list.getFirstItemOffset();
+    let index = Math.max(list.getFirstVisibleIndex(), 0);
+    let layout = list.getLayout(index);
+    while (layout && layout.y + layout.height <= lineY) {
+      const next = list.getLayout(index + 1);
+      if (!next) break;
+      index++;
+      layout = next;
+    }
+    if (!layout) return;
+    updateSnapshot(routeKey, {
+      anchorIndex: index,
+      anchorOffset: Math.max(lineY - layout.y, 0),
+    });
+  };
+
   const [refreshing, setRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(
-    props.showInitialLoader ?? true,
+    props.data.length > 0 ? false : (props.showInitialLoader ?? true),
   );
 
   const lastScrollPosition = useRef(0);
@@ -97,6 +146,13 @@ function RedditDataScroller<T extends RedditDataObject>(
     <FlashList<T>
       renderScrollComponent={TabBarScrollView}
       {...props}
+      ref={listRef}
+      initialScrollIndex={restoreAnchor?.index}
+      initialScrollIndexParams={
+        restoreAnchor
+          ? { viewOffset: restoreAnchor.offset - glassHeaderInset }
+          : undefined
+      }
       contentContainerStyle={{
         minHeight: "100%",
         ...props.contentContainerStyle,
@@ -124,6 +180,7 @@ function RedditDataScroller<T extends RedditDataObject>(
           Math.abs(scrollPosition - lastScrollPosition.current),
         );
         lastScrollPosition.current = scrollPosition;
+        saveScrollAnchor(scrollPosition);
       }}
       onEndReachedThreshold={2}
       onEndReached={() => {

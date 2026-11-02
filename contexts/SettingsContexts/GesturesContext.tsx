@@ -3,6 +3,7 @@ import { useMMKVBoolean, useMMKVObject } from "react-native-mmkv";
 
 const initialValues = {
   swipeAnywhereToNavigate: false,
+  showForwardButton: true,
   postSwipeOptions: {
     farRight: "downvote",
     right: "upvote",
@@ -20,6 +21,7 @@ const initialValues = {
 const initialGesturesContext = {
   ...initialValues,
   toggleSwipeAnywhereToNavigate: (_newValue?: boolean) => {},
+  toggleShowForwardButton: (_newValue?: boolean) => {},
   setPostSwipeOption: (
     _option: keyof PostSwipeOptions,
     _value: PostSwipeOption,
@@ -117,6 +119,11 @@ export function GesturesProvider({ children }: React.PropsWithChildren) {
   const swipeAnywhereToNavigate =
     storedSwipeAnywhereToNavigate ?? initialValues.swipeAnywhereToNavigate;
 
+  const [storedShowForwardButton, setShowForwardButton] =
+    useMMKVBoolean("showForwardButton");
+  const showForwardButton =
+    storedShowForwardButton ?? initialValues.showForwardButton;
+
   const [storedPostSwipeOptions, setPostSwipeOptions] =
     useMMKVObject<PostSwipeOptions>("postSwipeOptions");
   const postSwipeOptions =
@@ -193,6 +200,9 @@ export function GesturesProvider({ children }: React.PropsWithChildren) {
         swipeAnywhereToNavigate,
         toggleSwipeAnywhereToNavigate: (newValue = !swipeAnywhereToNavigate) =>
           setSwipeAnywhereToNavigate(newValue),
+        showForwardButton,
+        toggleShowForwardButton: (newValue = !showForwardButton) =>
+          setShowForwardButton(newValue),
         postSwipeOptions,
         setPostSwipeOption,
         commentSwipeOptions,

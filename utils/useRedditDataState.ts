@@ -1,3 +1,4 @@
+import { NavigationRouteContext } from "@react-navigation/native";
 import { DependencyList, useContext, useEffect, useRef, useState } from "react";
 
 import { RedditDataObject } from "../api/RedditData";
@@ -10,6 +11,12 @@ import { BannedUserError, UserDoesNotExistError } from "../api/User";
 import { NotLoggedInError } from "../api/gql/WebToken";
 import { AccountContext } from "../contexts/AccountContext";
 import { ToastContext } from "../contexts/ToastContext";
+import {
+  getRestorableSnapshot,
+  isSnapshotRetained,
+  releaseSnapshot,
+  updateSnapshot,
+} from "./screenSnapshots";
 
 export type FilterFunction<T extends RedditDataObject> = (
   newData: T[],
@@ -74,7 +81,21 @@ export default function useRedditDataState<T extends RedditDataObject>({
 }: UseRedditDataStateProps<T>) {
   const { currentUser } = useContext(AccountContext);
   const { showToast } = useContext(ToastContext);
-  const unfilteredAfter = useRef<string | undefined>(undefined);
+
+  // Screens re-opened by going forward start from where they were left.
+  const route = useContext(NavigationRouteContext);
+  const routeKey = route?.key;
+  const restoreKey = (route?.params as { restoreKey?: string } | undefined)
+    ?.restoreKey;
+  const [restored] = useState(() =>
+    getRestorableSnapshot(restoreKey, refreshDependencies),
+  );
+  useEffect(() => {
+    // The scroller has read its offset by now; this screen keeps its own.
+    if (restoreKey) releaseSnapshot(restoreKey);
+  }, []);
+
+  const unfilteredAfter = useRef<string | undefined>(restored?.cursor);
   // Bumped by every refresh, so loads started before it are dropped instead
   // of landing in the new list (e.g. after a sort change).
   const generation = useRef(0);
@@ -82,9 +103,13 @@ export default function useRedditDataState<T extends RedditDataObject>({
   // load-more would run alongside a refresh or the first page.
   const inFlight = useRef<Promise<void> | null>(null);
 
-  const [data, setData] = useState<T[]>([]);
-  const [fullyLoaded, setFullyLoaded] = useState(false);
-  const [hitFilterLimit, setHitFilterLimit] = useState(false);
+  const [data, setData] = useState<T[]>(() => (restored?.data as T[]) ?? []);
+  const [fullyLoaded, setFullyLoaded] = useState(
+    restored?.fullyLoaded ?? false,
+  );
+  const [hitFilterLimit, setHitFilterLimit] = useState(
+    restored?.hitFilterLimit ?? false,
+  );
   const [accessFailure, setAccessFailure] = useState<AccessFailure | null>(
     null,
   );
@@ -213,10 +238,28 @@ export default function useRedditDataState<T extends RedditDataObject>({
     });
   };
 
+  useEffect(() => {
+    if (!routeKey) return;
+    updateSnapshot(routeKey, {
+      data,
+      cursor: unfilteredAfter.current,
+      fullyLoaded,
+      hitFilterLimit,
+      dependencies: [...refreshDependencies],
+    });
+  }, [routeKey, data, fullyLoaded, hitFilterLimit]);
+
+  useEffect(() => {
+    if (!routeKey) return;
+    return () => {
+      if (!isSnapshotRetained(routeKey)) releaseSnapshot(routeKey);
+    };
+  }, [routeKey]);
+
   const initialLoad = useRef(true);
   useEffect(() => {
     if (initialLoad.current) {
-      loadMoreData();
+      if (!restored) loadMoreData();
       initialLoad.current = false;
     } else {
       refreshData({ clearBeforeLoading: true });
